@@ -42,6 +42,8 @@ cd clawd-usage-linux
 sh install.sh
 ```
 
+The installer asks whether to start Clawd Usage when you log in. To decide up front, run `sh install.sh --autostart` or `sh install.sh --no-autostart`. You can change your mind later by running it again with the other option.
+
 Then open **Clawd Usage** from your app menu. Everything installs to your home folder; no root needed apart from PyQt6.
 
 Needs a desktop session (not a headless server) and a distro recent enough to package PyQt6 (roughly 2021 or newer). Tested on Kubuntu with KDE Plasma 6 on Wayland; other setups are expected to work but haven't been tested - issues welcome.
