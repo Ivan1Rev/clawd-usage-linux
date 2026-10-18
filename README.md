@@ -16,7 +16,7 @@ Unofficial fan project, not made by or affiliated with Anthropic.
 - Running Claude Code sessions, Claude service status, and stats for the last 24 h / 7 days
 - A pixel sky behind Clawd that follows the time of day and your real local weather
 
-**Added in this port:** under Details (▾) you can switch the big number to **Claude Code**, **Cowork** or **Chat**. Anthropic only reports one combined percentage, so these are *estimates* built from what was active on this PC when the percentage went up (marked with ≈).
+**Added in this port:** the card stays a slim bar until you hover over it. Also, under Details (▾) you can switch the big number to **Claude Code**, **Cowork** or **Chat**. Anthropic only reports one combined percentage, so these are *estimates* built from what was active on this PC when the percentage went up (marked with ≈).
 
 ## Install
 
@@ -52,7 +52,8 @@ To remove: `sh uninstall.sh` (add `--all` to delete settings too).
 
 ## Using it
 
-- Drag the card to move it. Right-click for the menu (always on top, main number, sky & weather, animations, settings file).
+- The card sits as a slim bar (percent + hearts). Hover over it or click it and it slides open with all the stats; it closes again a couple of seconds after the mouse leaves. Right-click → *Close after mouse leaves* sets the delay, and *Open on hover* turns this off to keep it open.
+- Drag the card to move it. Right-click for the menu (open on hover, always on top, main number, sky & weather, animations, settings file).
 - Click Clawd to make him do something.
 - `–` hides it to the tray; `✕` quits.
 - Settings live in `~/.config/clawd-usage/config.json`.

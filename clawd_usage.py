@@ -23,7 +23,8 @@ import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from PyQt6.QtCore import (QPoint, QPointF, QProcess, QRectF, QSize, Qt, QTimer, QUrl)
+from PyQt6.QtCore import (QEasingCurve, QPoint, QPointF, QProcess, QRectF, QSize, Qt, QTimer, QUrl,
+                          QVariantAnimation)
 from PyQt6.QtGui import (QAction, QActionGroup, QColor, QCursor, QDesktopServices, QFont,
                          QIcon, QPainter, QPainterPath, QPixmap)
 from PyQt6.QtNetwork import QLocalServer, QLocalSocket
@@ -69,6 +70,8 @@ DEFAULTS = {
     'codeIntervalSeconds': 60,     # how often to re-read Claude Code's and Cowork's local logs
     'showAccount': True,
     'startHidden': False,
+    'hoverOpen': True,             # card stays a slim bar until the mouse is on it (or it's clicked)
+    'closeDelaySeconds': 2,        # how long it stays open after the mouse leaves
     'left': None,
     'top': None,
 }
@@ -588,6 +591,48 @@ class Chip(QLabel):
             self.on_click()
 
 
+class Clip(QWidget):
+    """Shows the top `frac` of its child at full size, so opening looks like a blind
+    being pulled down instead of the rows getting squashed."""
+
+    def __init__(self, child):
+        super().__init__()
+        self.child = child
+        child.setParent(self)
+        self.frac = 1.0
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+
+    def full_height(self):
+        lay = self.child.layout()
+        lay.activate()
+        w = self.width()
+        return lay.heightForWidth(w) if lay.hasHeightForWidth() and w > 0 else lay.sizeHint().height()
+
+    def sizeHint(self):
+        return QSize(self.child.sizeHint().width(), round(self.full_height() * self.frac))
+
+    def minimumSizeHint(self):
+        return QSize(0, self.sizeHint().height())
+
+    def set_frac(self, f):
+        self.frac = max(0.0, min(1.0, f))
+        self.child.setVisible(self.frac > 0)
+        self.place()
+        self.updateGeometry()
+
+    def place(self):
+        self.child.setGeometry(0, 0, self.width(), self.full_height())
+
+    def resizeEvent(self, e):
+        self.place()
+
+    def event(self, e):
+        if e.type() == e.Type.LayoutRequest:   # the child's content changed size
+            self.place()
+            self.updateGeometry()
+        return super().event(e)
+
+
 class Card(QFrame):
     def __init__(self, s):
         super().__init__()
@@ -653,6 +698,8 @@ class Widget(QWidget):
         hdr = QHBoxLayout()
         hdr.setSpacing(round(9 * s))
         hdr.addWidget(label('CLAUDE USAGE', 9.5, COL['muted'], s, semi))
+        self.mini_pct = label('--%', 10.5, COL['dead'], s, semi)
+        hdr.addWidget(self.mini_pct)
         hdr.addStretch(1)
         self.hearts = Hearts(self.m, s)
         hdr.addWidget(self.hearts)
@@ -663,6 +710,12 @@ class Widget(QWidget):
         for b in (self.btn_toggle, self.btn_hide, self.btn_exit):
             hdr.addWidget(b)
         v.addLayout(hdr)
+        # Everything below the header lives in `body`, which slides open on hover.
+        card_v = v
+        self.body = QWidget()
+        v = QVBoxLayout(self.body)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
         v.addSpacing(round(6 * s))
 
         # big percent + mascot
@@ -806,6 +859,22 @@ class Widget(QWidget):
         foot.addWidget(self.line_account, 1)
         foot.addWidget(self.line_stamp)
         v.addLayout(foot)
+        self.clip = Clip(self.body)
+        card_v.addWidget(self.clip)
+        v = card_v
+
+        self.close_timer = QTimer(self)
+        self.close_timer.setSingleShot(True)
+        self.close_timer.timeout.connect(self.maybe_close)
+        self.slide = QVariantAnimation(self)
+        self.slide.setDuration(240)
+        self.slide.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.slide.valueChanged.connect(self.on_slide)
+        self.slide.finished.connect(self.on_slide_done)
+        self.open = True
+        if cfg['hoverOpen']:
+            self.open = False
+            self.clip.set_frac(0)
 
         self.set_details(bool(cfg['expanded']), save=False)
         self.area.setVisible(bool(cfg['showMascot']))
@@ -858,7 +927,70 @@ class Widget(QWidget):
 
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
+            self.open_card()
             self.start_drag(e)
+
+    # -- slide open on hover ------------------------------------------------
+
+    def enterEvent(self, e):
+        self.close_timer.stop()
+        if self.cfg['hoverOpen']:
+            self.open_card()
+        super().enterEvent(e)
+
+    def leaveEvent(self, e):
+        if self.cfg['hoverOpen'] and self.open:
+            self.close_timer.start(max(0, int(float(self.cfg['closeDelaySeconds']) * 1000)))
+        super().leaveEvent(e)
+
+    def maybe_close(self):
+        # Not while a menu is open or the mouse is back on the card.
+        if QApplication.activePopupWidget() or self.underMouse():
+            if not self.underMouse():
+                self.close_timer.start(500)
+            return
+        self.close_card()
+
+    def open_card(self):
+        if self.open:
+            return
+        self.open = True
+        self.mini_pct.hide()
+        self.slide.stop()
+        self.slide.setStartValue(self.clip.frac)
+        self.slide.setEndValue(1.0)
+        self.slide.start()
+
+    def close_card(self):
+        if not self.open or not self.cfg['hoverOpen']:
+            return
+        self.open = False
+        self.slide.stop()
+        self.slide.setStartValue(self.clip.frac)
+        self.slide.setEndValue(0.0)
+        self.slide.start()
+
+    def on_slide(self, f):
+        self.clip.set_frac(float(f))
+        self.adjustSize()
+
+    def on_slide_done(self):
+        if not self.open:
+            self.mini_pct.show()
+        self.fit_wrapped()
+
+    def set_hover_open(self, on):
+        self.cfg['hoverOpen'] = on
+        save_config({'hoverOpen': on})
+        if on and not self.underMouse():
+            self.close_card()
+        elif not on:
+            self.close_timer.stop()
+            self.open_card()
+
+    def set_close_delay(self, secs):
+        self.cfg['closeDelaySeconds'] = secs
+        save_config({'closeDelaySeconds': secs})
 
     def mouseMoveEvent(self, e):
         d = getattr(self, '_drag', None)
@@ -898,6 +1030,17 @@ class Widget(QWidget):
         a.setCheckable(True)
         a.setChecked(self.details.isVisible())
         a.triggered.connect(self.toggle_details)
+        a = menu.addAction('Open on hover')
+        a.setCheckable(True)
+        a.setChecked(bool(self.cfg['hoverOpen']))
+        a.triggered.connect(lambda on: self.set_hover_open(on))
+        delay = menu.addMenu('Close after mouse leaves')
+        delay.setEnabled(bool(self.cfg['hoverOpen']))
+        for secs in (0.5, 1, 2, 3, 5, 10, 30):
+            a = delay.addAction(f'{secs:g} second' + ('' if secs == 1 else 's'))
+            a.setCheckable(True)
+            a.setChecked(float(self.cfg['closeDelaySeconds']) == secs)
+            a.triggered.connect(lambda _=False, x=secs: self.set_close_delay(x))
         a = menu.addAction('Always on top')
         a.setCheckable(True)
         a.setChecked(bool(self.cfg['topmost']))
@@ -1169,6 +1312,11 @@ class Widget(QWidget):
                 self.tray.setIcon(tray_icon(str(pct), COL[lv]))
             tray_tip.append(f'Session {pct}%' + (f' · resets in {span}' if span else ''))
 
+        self.mini_pct.setText(self.pct.text() + '%')
+        if self.mini_pct.styleSheet() != self.pct.styleSheet():
+            self.mini_pct.setStyleSheet(self.pct.styleSheet())
+        self.mini_pct.setVisible(not self.open)
+
         for key, box, line, bar in (('week', self.week_box, self.line_week, self.bar_week),
                                     ('fable', self.fable_box, self.line_fable, self.bar_fable)):
             val = u.get(key) if u else None
@@ -1272,6 +1420,10 @@ class Widget(QWidget):
         self.fit_wrapped()
 
     def fit_wrapped(self):
+        # Tell the card about the body's new height now, not on the next event loop pass
+        # (otherwise closing Details leaves the window tall for a moment).
+        self.clip.place()
+        self.clip.updateGeometry()
         self.card.layout().activate()
         for lb in WRAPPED:
             w = lb.width() if lb.width() > 10 else self.card.width() - round(24 * self.s)
