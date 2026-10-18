@@ -2,7 +2,7 @@
 
 A small desktop widget that shows how much of your Claude plan limit you've used, with Clawd walking around on top.
 
-This is a Linux port of **[Enhed/clawd-usage-winwidget](https://github.com/Enhed/clawd-usage-winwidget)**, which is Windows-only (PowerShell + WPF). All credit for the idea, the design and the Clawd animations goes to that project. This version is rewritten in Python + Qt so it runs on Debian-based Linux (Debian, Ubuntu, Mint, Pop!_OS…) on GNOME or KDE.
+This is a Linux port of **[Enhed/clawd-usage-winwidget](https://github.com/Enhed/clawd-usage-winwidget)**, which is Windows-only (PowerShell + WPF). All credit for the idea, the design and the Clawd animations goes to that project. This version is rewritten in Python + Qt so it runs on most Linux distros (Debian, Ubuntu, Mint, Fedora, Arch, openSUSE…) and desktops (GNOME, KDE, XFCE, Cinnamon…).
 
 ![Clawd Usage](screenshot.png)
 
@@ -22,14 +22,29 @@ Unofficial fan project, not made by or affiliated with Anthropic.
 
 You need [Claude Code](https://docs.claude.com/en/docs/claude-code) installed and logged in. The widget reads its data from `claude /usage`, which uses no tokens.
 
+**1. Install PyQt6** (the Qt library for Python) with your distro's package manager:
+
+| Distro | Command |
+|---|---|
+| Debian, Ubuntu, Mint, Pop!_OS | `sudo apt install python3-pyqt6` |
+| Fedora | `sudo dnf install python3-pyqt6` |
+| Arch, Manjaro, EndeavourOS | `sudo pacman -S python-pyqt6` |
+| openSUSE | `sudo zypper install python3-PyQt6` |
+| Anything else | `pip install --user PyQt6` |
+
+Not sure? Skip this step: `install.sh` checks for PyQt6 and prints the right command for your distro.
+
+**2. Download and install:**
+
 ```sh
-sudo apt install python3-pyqt6
 git clone https://github.com/Ivan1Rev/clawd-usage-linux.git
 cd clawd-usage-linux
 sh install.sh
 ```
 
 Then open **Clawd Usage** from your app menu. Everything installs to your home folder; no root needed apart from PyQt6.
+
+Needs a desktop session (not a headless server) and a distro recent enough to package PyQt6 (roughly 2021 or newer). Tested on Kubuntu with KDE Plasma 6 on Wayland; other setups are expected to work but haven't been tested - issues welcome.
 
 To remove: `sh uninstall.sh` (add `--all` to delete settings too).
 
@@ -42,7 +57,7 @@ To remove: `sh uninstall.sh` (add `--all` to delete settings too).
 
 ## Notes
 
-- **GNOME:** the tray icon needs the *AppIndicator* extension (Ubuntu has it already; on Debian install `gnome-shell-extension-appindicator`).
+- **GNOME:** the tray icon needs the *AppIndicator* extension. Ubuntu has it already; elsewhere install `gnome-shell-extension-appindicator` (Debian, Fedora, Arch) and enable it in the Extensions app.
 - **Wayland:** apps can't place their own windows, so the widget can't remember its position or force itself on top. Drag it where you want it each time, or use your desktop's window rules.
 - **Weather:** looks up your rough location from your IP (ipwho.is), then gets weather from Open-Meteo (met.no as a backup). To skip the IP lookup, set `weatherLat` and `weatherLon` in the settings file, or turn the sky off in the menu.
 
